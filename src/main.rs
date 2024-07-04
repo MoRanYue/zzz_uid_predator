@@ -1,16 +1,20 @@
-use std::{process, thread, time::Duration};
+use std::{thread, time::Duration, env, io};
 use winapi::um::winuser::{SW_SHOW, WS_CAPTION};
 use zzz_uid_predator::{self, Pos, win32};
 use rand::Rng;
 
 fn main() {
     println!("Checking whether UAC is granted...");
-    if !win32::is_user_an_admin() {
-        println!("This program must have UAC permission!");
-        process::exit(1);
+    if !win32::is_elevated() {
+        println!("UAC permission must be granted!");
+
+
+        if !win32::start_shell_with_uac(env::args().next().unwrap().as_str()) {
+            panic!("Cannot get UAC permission");
+        }
     }
 
-    println!("Trying to get ZZZ window...");
+    println!("Trying to find ZZZ window...");
     
     let hwnd = win32::find_window(None, "绝区零").expect("Cannot find the ZZZ window");
     println!("Success!");
@@ -56,14 +60,16 @@ fn main() {
             ::get_canceling_btn_center_pos(pos.clone(), size.clone())
             .left_click();
 
-        println!("Waitting for 12±12 secs...");
+        println!("Waitting for 15±12 secs...");
 
         let mut rng = rand::thread_rng();
         thread::sleep(Duration::from_secs(
             rng.gen_range(12..=24) - 12
-            + 12
+            + 15
         ));
     }
     
     println!("Attempts have been stopped due to window is not focused now!");
+
+    io::stdin().read_line(&mut String::new()).unwrap();
 }

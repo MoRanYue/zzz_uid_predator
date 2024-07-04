@@ -2,42 +2,68 @@ pub mod win32 {
     use winapi::{
         um::{
             winuser::{self, SW_SHOW, WINDOWINFO},
-            shellapi::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW}
+            shellapi::{self, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW},
+            winnt::{HANDLE, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY},
+            handleapi,
+            processthreadsapi,
+            securitybaseapi
         },
-        shared::windef::{HWND, RECT}
+        shared::{
+            windef::{HWND, RECT},
+            minwindef::DWORD
+        }
     };
     use std::{
         ffi::OsStr, mem, os::windows::ffi::OsStrExt, ptr
     };
 
     fn to_wide_str(s: &str) -> Vec<u16> {
-        OsStr::new(s).encode_wide().chain(Some(0).into_iter()).collect::<Vec<u16>>()
+        OsStr::new(s).encode_wide().chain(Some(0)).collect::<Vec<u16>>()
     }
 
     pub fn start_shell_with_uac(file: &str) -> bool {
-        let mut execute_info = SHELLEXECUTEINFOW {
-            cbSize: mem::size_of::<SHELLEXECUTEINFOW>() as u32,
-            fMask: SEE_MASK_NOASYNC,
-            hwnd: ptr::null_mut(),
-            lpVerb: to_wide_str("runas").as_ptr(),
-            lpFile: to_wide_str(file).as_ptr(),
-            lpParameters: ptr::null_mut(),
-            lpDirectory: ptr::null_mut(),
-            nShow: SW_SHOW,
-            hInstApp: ptr::null_mut(),
-            lpIDList: ptr::null_mut(),
-            lpClass: ptr::null_mut(),
-            hkeyClass: ptr::null_mut(),
-            dwHotKey: 0,
-            hMonitor: ptr::null_mut(),
-            hProcess: ptr::null_mut()
-        };
+        let mut execute_info: SHELLEXECUTEINFOW = unsafe { mem::zeroed() };
+        execute_info.cbSize = mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+        execute_info.lpFile = to_wide_str(file).as_ptr();
+        execute_info.lpVerb = to_wide_str("runas").as_ptr();
+        execute_info.nShow = SW_SHOW;
+        execute_info.fMask = SEE_MASK_NOASYNC;
 
-        unsafe { ShellExecuteExW(&mut execute_info) != 0 }
+        unsafe { shellapi::ShellExecuteExW(&mut execute_info) != 0 }
     }
 
-    pub fn is_user_an_admin() -> bool {
-        todo!();
+    pub fn is_elevated() -> bool {
+        let mut elevated = TOKEN_ELEVATION { TokenIsElevated: 0 };
+        let mut token_handle: HANDLE = ptr::null_mut();
+
+        unsafe {
+            if processthreadsapi::OpenProcessToken(
+                processthreadsapi::GetCurrentProcess(), 
+                TOKEN_QUERY, 
+                &mut token_handle
+            ) == 0 {
+                return false
+            }
+
+            let mut ret_len: DWORD = 0;
+
+            if securitybaseapi::GetTokenInformation(
+                token_handle, 
+                TokenElevation, 
+                &mut elevated as *mut _ as *mut _, 
+                mem::size_of_val(&elevated) as DWORD, 
+                &mut ret_len
+            ) == 0 {
+                handleapi::CloseHandle(token_handle);
+
+                return false
+            }
+
+            // close handle to avoid memory leak
+            handleapi::CloseHandle(token_handle);
+        }
+
+        elevated.TokenIsElevated != 0
     }
 
     pub fn find_window(class_name: Option<&str>, window_name: &str) -> Option<HWND> {

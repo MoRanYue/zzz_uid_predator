@@ -1,9 +1,9 @@
 [package]
 name = "zzz_uid_predator"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [dependencies]
 rand = "0.8.5"
 rsautogui = "0.2.2"
-winapi = { version = "0.3.9", features = ["winuser", "shellapi", "winbase"] }
+winapi = { version = "0.3.9", features = ["winuser", "shellapi", "winbase", "winnt", "handleapi", "processthreadsapi", "securitybaseapi"] }
